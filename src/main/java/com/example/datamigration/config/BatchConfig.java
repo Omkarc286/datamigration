@@ -39,6 +39,9 @@ import javax.sql.DataSource;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.*;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.charset.CharsetEncoder;
 
 @Configuration
 @EnableBatchProcessing(isolationLevelForCreate = "ISOLATION_DEFAULT") // Add isolation level to avoid conflicts
@@ -179,18 +182,57 @@ public class BatchConfig {
 
         createTableIfNotExists(tableName, headers);
         createIndexes(tableName, headers);
+        
+        // Create a UTF-8 encoder for validation
+        CharsetEncoder utf8Encoder = StandardCharsets.UTF_8.newEncoder();
 
         return new JdbcBatchItemWriterBuilder<Map<String, String>>()
                 .sql(generateInsertSql(tableName, headers))
                 .itemSqlParameterSourceProvider(item -> {
                     MapSqlParameterSource paramSource = new MapSqlParameterSource();
                     for (Map.Entry<String, String> entry : item.entrySet()) {
-                        paramSource.addValue(entry.getKey(), entry.getValue());
+                        String value = entry.getValue();
+                        // Check if the value is valid UTF-8
+                        if (value != null && !isValidUtf8(value, utf8Encoder)) {
+                            logger.warn("Non-UTF-8 characters detected in column '{}', sanitizing value", entry.getKey());
+                            // Replace with sanitized version (this removes invalid chars)
+                            value = sanitizeToUtf8(value);
+                        }
+                        paramSource.addValue(entry.getKey(), value);
                     }
                     return paramSource;
                 })
                 .dataSource(dataSource)
                 .build();
+    }
+    
+    /**
+     * Checks if a string contains valid UTF-8 characters
+     */
+    private boolean isValidUtf8(String text, CharsetEncoder encoder) {
+        return encoder.canEncode(text);
+    }
+    
+    /**
+     * Sanitizes a string to ensure it only contains valid UTF-8 characters
+     */
+    private String sanitizeToUtf8(String text) {
+        if (text == null) return null;
+        
+        StringBuilder sanitized = new StringBuilder();
+        CharsetEncoder encoder = StandardCharsets.UTF_8.newEncoder();
+        
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (encoder.canEncode(c)) {
+                sanitized.append(c);
+            } else {
+                // Replace invalid character with a replacement character or empty string
+                sanitized.append("�"); // Unicode replacement character
+            }
+        }
+        
+        return sanitized.toString();
     }
 
     private void createTableIfNotExists(String tableName, List<String> headers) throws Exception {
