@@ -1,0 +1,29 @@
+server:
+  port: 8082
+logging:
+  level:
+    org.springframework.batch: INFO
+    com.example.datamigration: DEBUG
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/bigdata_test
+    username: postgres
+    password: postgresTr!@xa+789
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 60000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  batch:
+    jdbc:
+      initialize-schema: never
+    job:
+      enabled: true
+
+# Move this outside the spring section
+csv:
+  input:
+    file: "C:\\Users\\Omkar\\OneDrive - triaxa.com\\Documents\\PeopleDataLabs.csv"
